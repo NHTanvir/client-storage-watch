@@ -23,3 +23,13 @@ test('leftovers after logout keeps only secrets', () => {
   assert.ok(left.every((x) => x.leftover));
   assert.ok(left.some((x) => x.key === 'authToken'));
 });
+
+import { toMarkdown } from '../markdown.js';
+import { diffSnapshots } from '../diff.js';
+test('markdown renders leftovers and per-store changes', () => {
+  const a = { label: 'before', data: { localStorage: { x: '1' } } };
+  const b = { label: 'after logout', data: { localStorage: { authToken: 'eyJa.eyJb.sigPART123' } } };
+  const md = toMarkdown({ d: diffSnapshots(a, b), a, b, leftovers: [{ store: 'localStorage', key: 'authToken', flags: ['jwt'] }] });
+  assert.ok(md.includes('still present after logout'));
+  assert.ok(md.includes('authToken'));
+});

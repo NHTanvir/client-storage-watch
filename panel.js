@@ -77,5 +77,11 @@ document.getElementById('clear').addEventListener('click', async () => {
   snaps = []; fillSelects(); renderList();
 });
 
+document.getElementById('copy').addEventListener('click', async () => {
+  if (!window.__last) { out.innerHTML = '<section>Run a diff first.</section>'; return; }
+  const { toMarkdown } = await import('./markdown.js');
+  navigator.clipboard.writeText(toMarkdown(window.__last)).catch(() => {});
+});
+
 chrome.tabs.onActivated.addListener(load);
 load();
