@@ -1,5 +1,5 @@
 import { diffSnapshots } from './diff.js';
-import { flagSnapshot, leftoversAfterLogout } from './flags.js';
+import { flagSnapshot, leftoversAfterLogout, accountSwitchLeftovers } from './flags.js';
 
 let host = '';
 let snaps = [];
@@ -16,6 +16,15 @@ function fillSelects() {
 }
 
 function flagChips(flags) { return flags.map((f) => `<span class="flag">${esc(f)}</span>`).join(''); }
+function swCacheNote(snap) {
+  const d = snap.data || {};
+  const notes = [];
+  const sw = Object.keys(d.serviceWorkers || {}).length;
+  if (sw) notes.push(`${sw} service worker(s) registered`);
+  const ngsw = Object.keys(d.cacheStorage || {}).filter((n) => /ngsw/i.test(n));
+  if (ngsw.length) notes.push(`Angular SW caches (${ngsw.join(', ')}) — check vs CVE-2026-50184`);
+  return notes.length ? `<div class="meta3">${esc(notes.join(' · '))}</div>` : '';
+}
 
 function renderList() {
   let html = `<section>${snaps.length} snapshot(s) for <code>${esc(host)}</code>.</section>`;
@@ -23,7 +32,8 @@ function renderList() {
     const f = flagSnapshot(s);
     html += `<section><b>${esc(s.label)}</b> — <code>${esc(s.takenAt)}</code>
       ${f.length ? `<div>${f.length} flagged entr${f.length === 1 ? 'y' : 'ies'}: ` +
-        f.slice(0, 20).map((e) => `<span class="k">${esc(e.store)}.${esc(e.key)}</span>${flagChips(e.flags)}`).join(' ') + '</div>' : ''}</section>`;
+        f.slice(0, 20).map((e) => `<span class="k">${esc(e.store)}.${esc(e.key)}</span>${flagChips(e.flags)}<span class="conf conf-${esc(e.confidence)}">${esc(e.confidence)}</span>`).join(' ') + '</div>' : ''}
+      ${swCacheNote(s)}</section>`;
   }
   out.innerHTML = html;
 }
@@ -54,11 +64,18 @@ document.getElementById('diff').addEventListener('click', () => {
   if (!a || !b) return;
   const d = diffSnapshots(a, b);
   const leftovers = /logout|signout|sign out|logged out/i.test(b.label) ? leftoversAfterLogout(b) : [];
-  window.__last = { d, a, b, leftovers };
+  const prevValues = flagSnapshot(a).flatMap((e) => (e.flags.includes('email') || e.flags.includes('id'))
+    ? [String((a.data[e.store] || {})[e.key])] : []);
+  const stale = /switch|account|login|signed in|user/i.test(b.label) ? accountSwitchLeftovers(b, prevValues) : [];
+  window.__last = { d, a, b, leftovers, stale };
   let html = `<section><b>${esc(a.label)}</b> → <b>${esc(b.label)}</b></section>`;
   if (leftovers.length) {
     html += `<section><h3 class="leftover">⚠ Secrets still present after logout (${leftovers.length})</h3>` +
       leftovers.map((e) => `<div class="leftover k">${esc(e.store)}.${esc(e.key)}${flagChips(e.flags)}</div>`).join('') + '</section>';
+  }
+  if (stale.length) {
+    html += `<section><h3 class="leftover">⚠ Previous-account data after switch (${stale.length})</h3>` +
+      stale.map((e) => `<div class="leftover k">${esc(e.store)}.${esc(e.key)} — matched ${esc(e.matched.join(', '))}</div>`).join('') + '</section>';
   }
   for (const store of Object.keys(d)) {
     const s = d[store];

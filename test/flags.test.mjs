@@ -33,3 +33,33 @@ test('markdown renders leftovers and per-store changes', () => {
   assert.ok(md.includes('still present after logout'));
   assert.ok(md.includes('authToken'));
 });
+
+import { decodeJwt, jwtExpiry, accountSwitchLeftovers } from '../flags.js';
+const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+const realJwt = `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: '1', iat: 1000, exp: 1000 + 60 * 60 * 24 * 30 })}.sig`;
+
+test('decodeJwt confirms real jwt, rejects random 3-dot base64', () => {
+  assert.ok(decodeJwt(realJwt));
+  assert.equal(decodeJwt('aaa.bbb.ccc'), null);
+});
+test('jwtExpiry flags long-lived token', () => {
+  const e = jwtExpiry(realJwt);
+  assert.equal(e.longLived, true);
+  assert.equal(e.noExpiry, false);
+});
+test('confidence: decodable jwt is high, structural-only is low', () => {
+  const high = flagSnapshot({ data: { localStorage: { t: realJwt } } })[0];
+  assert.equal(high.confidence, 'high');
+  const low = flagSnapshot({ data: { localStorage: { t: 'eyJaaaaa.eyJbbbbb.ccccc' } } })[0];
+  assert.equal(low.confidence, 'low');
+});
+test('auth-library key names flagged high confidence', () => {
+  const e = flagSnapshot({ data: { localStorage: { 'sb-abcde-auth-token': 'x' } } })[0];
+  assert.ok(e.flags.includes('token-like'));
+  assert.equal(e.confidence, 'high');
+});
+test('account-switch leftovers detect previous account values', () => {
+  const after = { data: { localStorage: { profile: '{"email":"alice@x.com"}' } } };
+  const hits = accountSwitchLeftovers(after, ['alice@x.com']);
+  assert.ok(hits.some((h) => h.staleAccountData));
+});
