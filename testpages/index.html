@@ -1,0 +1,26 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Client Storage Watch — test page</title></head>
+<body>
+<h1>Storage test page</h1>
+<p>Take a "before login" snapshot, click Login, snapshot "after login", click
+Logout (partial), snapshot "after logout". The leftover token should be flagged.</p>
+<button id="login">Login</button> <button id="logout">Logout (partial)</button>
+<script>
+  document.getElementById('login').onclick = async () => {
+    localStorage.setItem('authToken', 'eyJhbGciOi.eyJzdWIiOi.sigPART123');
+    localStorage.setItem('profile', JSON.stringify({ email: 'tester@example.com', userId: 9, tenantId: 't_1' }));
+    sessionStorage.setItem('csrf', 'abc123');
+    document.cookie = 'readable_session=abc; path=/';
+    // write an IndexedDB record so the collector has something to sample
+    const req = indexedDB.open('app', 1);
+    req.onupgradeneeded = () => req.result.createObjectStore('kv');
+    req.onsuccess = () => { const db = req.result; db.transaction('kv', 'readwrite').objectStore('kv').put({ token: 'eyJa.eyJb.sig123' }, 'creds'); db.close(); };
+    alert('logged in (storage written)');
+  };
+  document.getElementById('logout').onclick = () => {
+    // BUG under test: only clears sessionStorage, leaves the token behind
+    sessionStorage.clear();
+    alert('logged out (but token left in localStorage + IndexedDB)');
+  };
+</script>
+</body></html>

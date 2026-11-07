@@ -1,0 +1,13 @@
+{
+  "manifest_version": 3,
+  "name": "Client Storage Watch",
+  "version": "1.0.0",
+  "description": "Snapshots and diffs browser storage (localStorage, sessionStorage, IndexedDB, Cache Storage, cookies, service workers) to find data left behind. Authorized testing only.",
+  "permissions": ["storage", "sidePanel", "scripting", "tabs"],
+  "optional_host_permissions": ["*://*/*"],
+  "background": { "service_worker": "background.js" },
+  "side_panel": { "default_path": "panel.html" },
+  "action": { "default_title": "Client Storage Watch (open side panel)" },
+  "options_page": "options.html",
+  "icons": { "128": "icon.png" }
+}
